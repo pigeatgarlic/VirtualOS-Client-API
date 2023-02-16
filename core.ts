@@ -3,19 +3,16 @@ import { UserProfile } from "./user/user.model";
 import { CookieManager } from "./cookies/cookie"
 
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseKey = import.meta.env.VITE_SUPABASE_KEY;
 
 
 export class VirtualOSCore {
     supabase : SupabaseClient<any, "public", any>
     cookies : CookieManager;
 
-    profile : UserProfile | null
     refresh_token : string | null
     access_token : string | null
 
-    constructor() {
+    constructor(supabaseUrl: string, supabaseKey: string) {
         if (supabaseUrl  == null || supabaseKey == null) {
             return
         }
@@ -27,7 +24,6 @@ export class VirtualOSCore {
         let access = this.cookies.getCookie("access_token")
 
         if (refresh_token == null || access == null ) {
-            this.profile = null;
         } else {
             this.refresh_token = refresh_token
             this.access_token = access
@@ -36,65 +32,74 @@ export class VirtualOSCore {
                 refresh_token: this.refresh_token,
                 access_token: this.access_token
             })
-
-            this.fetchUserProfile().catch((err) => {
-                console.log(err);
-            })
         }
     }
 
-
-    private async fetchUserProfile() : Promise<void> {
-        const user = await this.supabase.auth.getUser()
-        if (user.error != null) {
-            return
-        }
-
-        const profile = await this.supabase.from("profile")
-            .select("username, account_id")
-            .eq("account_id",user.data.user?.id)
-
-        if (profile.error != null) {
-            return
-        }
-
-        this.profile = {
-            username : profile.data[0].account_id,
-            email : user.data.user?.email
-        };
-    }
 
     public async SignInWithGoogle() : Promise<Error | null>
     {
-        if((await this.IsSignedIn()) == true) {
-            return new Error("already signed in")
-        }
-
         const result = await this.supabase.auth.signInWithOAuth({provider : "google"});
         if(result.error != null) {
             return new Error(result.error.message)
         }
 
-        const session = await (await this.supabase.auth.getSession()).data.session
-        if (session == null) {
-            throw new Error("no session")
+        const { data:{session},error} = await this.supabase.auth.getSession()
+        if (error != null) {
+            return new Error(error.message)
         }
 
         this.cookies.setCookie("refresh_token",session.refresh_token,null);
         this.cookies.setCookie("access_token",session.access_token,null);
-
-        await this.fetchUserProfile();
     }
+
+    public async SignOut() : Promise<Error | null> 
+    {
+        const {error} = await this.supabase.auth.signOut()
+        if (error != null) {
+            return new Error(error.message)
+        }
+
+        this.cookies.deleteCookie("refresh_token",null,null);
+        this.cookies.deleteCookie("access_token",null,null);
+    }
+
 
     public async IsSignedIn() : Promise<boolean> {
         return (await this.supabase.auth.getSession()).data.session != null;
     }
-    public getProfile() : UserProfile {
-        return this.profile
+
+    public async getProfile() : Promise<{profile: UserProfile|null;error: Error|null}> {
+        const {data,error} = await this.supabase.from("user_profile")
+            .select("metadata,email")
+        
+        if (error != null) {
+            return {
+                profile: null,
+                error: new Error(error.message)
+            }
+        }
+
+        return {
+            profile: {
+            email: data[0].email,
+            metadata: data[0].metadata
+        }, error: null};
+    }
+
+
+
+
+    public async CreateUserApplication() : Promise<{data: any,error :Error}> 
+    {
+        const {data,error} = await this.supabase.from("user_application") .insert({
+                
+            }).select()
+
+        if (error != null) {
+            return {
+                data: null,
+                error: new Error(error.message)
+            }
+        }
     }
 }
-
-
-const out = new VirtualOSCore();
-
-export {out};

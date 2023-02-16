@@ -2,8 +2,12 @@
   "name": "virtualos-core",
   "version": "1.0.2",
   "description": "",
-  "main": "index.js",
+  "main": "dist/index.js",
+  "files": [
+    "dist"
+  ],
   "scripts": {
+    "deploy": "tsc --module commonjs && npm publish",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "huyhoangdo0205@gmail.com",
